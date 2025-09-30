@@ -47,13 +47,28 @@ const ReceiverInfoScreen: React.FC = () => {
 
       if (announcementError) throw announcementError
 
+      // 🔒 VÉRIFICATIONS DE RÉFLEXIVITÉ - Interdire les espaces coli avec soi-même
+      const senderId = user!.id // Current user is the sender
+      const gpId = announcement.user_id // GP who created the announcement
+
+      if (senderId === gpId) {
+        Alert.alert('Erreur', 'Vous ne pouvez pas être à la fois expéditeur et transporteur pour le même colis.')
+        return
+      }
+
+      // Vérifier si l'email du destinataire correspond à l'utilisateur actuel
+      if (receiverEmail && receiverEmail.toLowerCase() === user?.email?.toLowerCase()) {
+        Alert.alert('Erreur', 'Vous ne pouvez pas vous désigner comme votre propre destinataire.')
+        return
+      }
+
       // Create ColiSpace with receiver info
       const { data: coliSpace, error: coliSpaceError } = await supabase
         .from('coli_spaces')
         .insert({
           announcement_id: announcementId,
-          sender_id: user!.id, // Current user is the sender
-          gp_id: announcement.user_id, // GP who created the announcement
+          sender_id: senderId,
+          gp_id: gpId,
           receiver_name: receiverName,
           receiver_phone: receiverPhone,
           receiver_email: receiverEmail || null,

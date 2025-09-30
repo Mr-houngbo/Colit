@@ -12,6 +12,8 @@ export type RootStackParamList = {
   ColiSpace: { coliSpaceId: string }
   AnnouncementDetails: { announcementId: string }
   ReceiverInfo: { announcementId: string }
+  Messaging: { coliSpaceId: string }
+  Photos: { coliSpaceId: string }
   CreateAnnouncementChoice: undefined
   CreateGPAnnouncement: undefined
   CreateSenderAnnouncement: undefined

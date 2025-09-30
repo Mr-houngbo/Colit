@@ -20,6 +20,8 @@ import ProfileScreen from './screens/ProfileScreen'
 import ColiSpaceScreen from './screens/ColiSpaceScreen'
 import AnnouncementDetailsScreen from './screens/AnnouncementDetailsScreen'
 import ReceiverInfoScreen from './screens/ReceiverInfoScreen'
+import MessagingScreen from './screens/MessagingScreen'
+import PhotosScreen from './screens/PhotosScreen'
 import { RootStackParamList, MainTabParamList } from './types/navigation'
 import { requestNotificationPermissions } from './services/notifications'
 const Stack = createNativeStackNavigator<RootStackParamList>()
@@ -117,6 +119,8 @@ function AppNavigator() {
         <Stack.Screen name="ColiSpace" component={ColiSpaceScreen} />
         <Stack.Screen name="AnnouncementDetails" component={AnnouncementDetailsScreen} />
         <Stack.Screen name="ReceiverInfo" component={ReceiverInfoScreen} />
+        <Stack.Screen name="Messaging" component={MessagingScreen} />
+        <Stack.Screen name="Photos" component={PhotosScreen} />
         <Stack.Screen name="CreateAnnouncementChoice" component={CreateAnnouncementChoiceScreen} />
         <Stack.Screen name="CreateGPAnnouncement" component={CreateGPAnnouncementScreen} />
         <Stack.Screen name="CreateSenderAnnouncement" component={CreateSenderAnnouncementScreen} />

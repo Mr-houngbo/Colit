@@ -3,6 +3,11 @@ export interface User {
   name: string
   email?: string
   photo?: string
+  full_name?: string
+  avatar_url?: string
+  phone?: string
+  bio?: string
+  location?: string
   created_at: string
   updated_at: string
 }

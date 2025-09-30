@@ -10,6 +10,7 @@ interface AuthContextType {
   signOut: () => Promise<void>
   signInWithGoogle: () => Promise<void>
   signInWithApple: () => Promise<void>
+  updateProfile: (updates: Partial<User>) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -51,7 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchProfile = async (userId: string): Promise<User> => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, name, email, photo, created_at, updated_at')
+      .select('id, name, email, photo, full_name, avatar_url, phone, bio, location, created_at, updated_at')
       .eq('id', userId)
       .single()
     if (error) throw error
@@ -84,6 +85,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Implement Apple auth
   }
 
+  const updateProfile = async (updates: Partial<User>) => {
+    if (!user) throw new Error('No user logged in')
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', user.id)
+      .select()
+      .single()
+
+    if (error) throw error
+
+    setUser(data)
+  }
+
   const value = {
     user,
     loading,
@@ -92,6 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signOut,
     signInWithGoogle,
     signInWithApple,
+    updateProfile,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

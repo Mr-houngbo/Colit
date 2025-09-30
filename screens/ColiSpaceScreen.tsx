@@ -285,6 +285,16 @@ const ColiSpaceScreen: React.FC<Props> = ({ route }) => {
     navigation.goBack()
   }
 
+  const handleOpenMessaging = () => {
+    // @ts-ignore
+    navigation.navigate('Messaging', { coliSpaceId })
+  }
+
+  const handleOpenPhotos = () => {
+    // @ts-ignore
+    navigation.navigate('Photos', { coliSpaceId })
+  }
+
   const fetchColiSpace = async () => {
     const { data, error } = await supabase
       .from('coli_spaces')
@@ -342,6 +352,38 @@ const ColiSpaceScreen: React.FC<Props> = ({ route }) => {
     </View>
   )
 
+  const getStatusColor = () => {
+    if (!timelineSteps || timelineSteps.length === 0) return '#6C47FF'
+    const lastCompletedStep = timelineSteps.filter(step => step.completed).pop()
+    if (!lastCompletedStep) return '#6C47FF'
+
+    switch (lastCompletedStep.id) {
+      case 'created': return '#6C47FF' // Bleu - En attente
+      case 'validated': return '#ffc107' // Jaune - Validé
+      case 'picked_up': return '#17a2b8' // Bleu ciel - Pris en charge
+      case 'in_transit': return '#28a745' // Vert - En transit
+      case 'delivered': return '#20c997' // Vert clair - Livré
+      case 'completed': return '#6c757d' // Gris - Terminé
+      default: return '#6C47FF'
+    }
+  }
+
+  const getStatusText = () => {
+    if (!timelineSteps || timelineSteps.length === 0) return 'Chargement...'
+    const lastCompletedStep = timelineSteps.filter(step => step.completed).pop()
+    if (!lastCompletedStep) return 'En attente'
+
+    switch (lastCompletedStep.id) {
+      case 'created': return 'Annonce créée'
+      case 'validated': return 'Colis validé'
+      case 'picked_up': return 'Pris en charge'
+      case 'in_transit': return 'En transit'
+      case 'delivered': return 'Livré'
+      case 'completed': return 'Terminé'
+      default: return 'En attente'
+    }
+  }
+
   const styles = StyleSheet.create({
     container: {
       flex: 1,
@@ -362,6 +404,88 @@ const ColiSpaceScreen: React.FC<Props> = ({ route }) => {
       fontWeight: 'bold',
       color: '#fff',
       flex: 1,
+    },
+    statusIndicator: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 15,
+      marginRight: 10,
+    },
+    statusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginRight: 6,
+    },
+    statusText: {
+      color: '#fff',
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    headerButtons: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    headerButton: {
+      marginLeft: 15,
+      padding: 5,
+    },
+    participantsContainer: {
+      backgroundColor: theme === 'dark' ? '#1a1a1a' : '#fff',
+      padding: 16,
+      margin: 10,
+      borderRadius: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    participantsTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: theme === 'dark' ? '#fff' : '#000',
+      marginBottom: 16,
+      textAlign: 'center',
+    },
+    participantsGrid: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      alignItems: 'center',
+    },
+    participantCard: {
+      alignItems: 'center',
+      flex: 1,
+      padding: 8,
+    },
+    participantAvatar: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      backgroundColor: '#6C47FF',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    participantInitial: {
+      color: '#fff',
+      fontSize: 18,
+      fontWeight: 'bold',
+    },
+    participantName: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme === 'dark' ? '#fff' : '#000',
+      textAlign: 'center',
+      marginBottom: 4,
+    },
+    participantRole: {
+      fontSize: 12,
+      color: theme === 'dark' ? '#ccc' : '#666',
+      textAlign: 'center',
     },
     messagesList: {
       flex: 1,
@@ -503,11 +627,68 @@ const ColiSpaceScreen: React.FC<Props> = ({ route }) => {
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {coliSpace?.announcements ? 
-            `${coliSpace.announcements.departure_city} → ${coliSpace.announcements.arrival_city}` : 
+          {coliSpace?.announcements ?
+            `${coliSpace.announcements.departure_city} → ${coliSpace.announcements.arrival_city}` :
             'Coli Space'
           }
         </Text>
+        <View style={styles.statusIndicator}>
+          <View style={[styles.statusDot, { backgroundColor: getStatusColor() }]} />
+          <Text style={styles.statusText}>{getStatusText()}</Text>
+        </View>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity onPress={handleOpenPhotos} style={styles.headerButton}>
+            <Ionicons name="camera" size={24} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleOpenMessaging} style={styles.headerButton}>
+            <Ionicons name="chatbubble-ellipses" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Participants Info Section */}
+      <View style={styles.participantsContainer}>
+        <Text style={styles.participantsTitle}>Participants du coli</Text>
+        <View style={styles.participantsGrid}>
+          {/* Expéditeur */}
+          <View style={styles.participantCard}>
+            <View style={styles.participantAvatar}>
+              <Text style={styles.participantInitial}>
+                {coliSpace?.sender_id ? 'E' : '?'}
+              </Text>
+            </View>
+            <Text style={styles.participantName}>
+              {coliSpace?.sender_id ? 'Expéditeur' : 'Non assigné'}
+            </Text>
+            <Text style={styles.participantRole}>Expéditeur</Text>
+          </View>
+
+          {/* GP */}
+          <View style={styles.participantCard}>
+            <View style={styles.participantAvatar}>
+              <Text style={styles.participantInitial}>
+                {coliSpace?.gp_id ? 'T' : '?'}
+              </Text>
+            </View>
+            <Text style={styles.participantName}>
+              {coliSpace?.gp_id ? 'Transporteur' : 'Non assigné'}
+            </Text>
+            <Text style={styles.participantRole}>Transporteur</Text>
+          </View>
+
+          {/* Destinataire */}
+          <View style={styles.participantCard}>
+            <View style={styles.participantAvatar}>
+              <Text style={styles.participantInitial}>
+                {coliSpace?.receiver_email ? 'D' : '?'}
+              </Text>
+            </View>
+            <Text style={styles.participantName}>
+              {coliSpace?.receiver_email ? 'Destinataire' : 'Non assigné'}
+            </Text>
+            <Text style={styles.participantRole}>Destinataire</Text>
+          </View>
+        </View>
       </View>
 
       {/* Timeline Section */}
@@ -543,29 +724,6 @@ const ColiSpaceScreen: React.FC<Props> = ({ route }) => {
         ) : (
           <Text style={styles.timelineEmptyText}>Chargement de la timeline...</Text>
         )}
-      </View>
-
-      <FlatList
-        style={styles.messagesList}
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderMessage}
-        inverted
-      />
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          value={newMessage}
-          onChangeText={setNewMessage}
-          placeholder="Tapez un message..."
-          placeholderTextColor={theme === 'dark' ? '#ccc' : '#666'}
-        />
-        <TouchableOpacity onPress={pickImage}>
-          <Text>📎</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
-          <Text style={styles.sendButtonText}>Envoyer</Text>
-        </TouchableOpacity>
       </View>
     </View>
   )

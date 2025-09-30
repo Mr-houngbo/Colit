@@ -74,6 +74,12 @@ const AnnouncementsScreen: React.FC = () => {
     const senderId = announcement.user_id // The one who created the send_request
     const gpId = user!.id // Current user becoming GP
 
+    // 🔒 VÉRIFICATIONS DE RÉFLEXIVITÉ - Interdire les espaces coli avec soi-même
+    if (senderId === gpId) {
+      alert("Vous ne pouvez pas être à la fois expéditeur et transporteur pour le même colis.")
+      return
+    }
+
     // Utiliser la fonction RPC pour get_or_create
     const { data, error } = await supabase.rpc('get_or_create_coli_space', {
       p_announcement_id: announcement.id,
