@@ -40,20 +40,14 @@ const CreateAnnouncementChoiceScreen: React.FC = () => {
           <View style={styles.iconContainer}>
             <Text style={styles.iconText}>🚚</Text>
           </View>
-          <Text style={styles.choiceTitle}>Je propose un trajet</Text>
-          <Text style={styles.choiceDescription}>
-            Je suis voyageur et j'ai de l'espace disponible dans mes bagages
-          </Text>
+          <Text style={styles.choiceTitle}>Je suis voyageur et j'ai de l'espace disponible dans mes bagages</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={[styles.choiceCard, styles.senderCard]} onPress={handleSenderChoice}>
           <View style={styles.iconContainer}>
             <Text style={styles.iconText}>📦</Text>
           </View>
-          <Text style={styles.choiceTitle}>Je veux envoyer un colis</Text>
-          <Text style={styles.choiceDescription}>
-            J'ai un colis à envoyer et je cherche un voyageur de confiance
-          </Text>
+          <Text style={styles.choiceTitle}>J'ai un colis à envoyer et je cherche un voyageur de confiance</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -126,19 +120,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 8,
     textAlign: 'center',
-  },
-  choiceDescription: {
-    fontSize: 16,
-    color: '#fff',
-    textAlign: 'center',
-    lineHeight: 22,
-    opacity: 0.9,
-  },
-  infoText: {
-    fontSize: 14,
-    textAlign: 'center',
-    fontStyle: 'italic',
-    marginBottom: 20,
   },
 })
 

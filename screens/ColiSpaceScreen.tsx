@@ -7,6 +7,7 @@ import { Message, ColiSpace } from '../types'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import * as ImagePicker from 'expo-image-picker'
+import { sendColiSpaceNotification, COLI_SPACE_NOTIFICATIONS } from '../services/notifications'
 
 type RootStackParamList = {
   ColiSpace: { coliSpaceId: string }
@@ -24,17 +25,245 @@ const ColiSpaceScreen: React.FC<Props> = ({ route }) => {
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [coliSpace, setColiSpace] = useState<any>(null)
+  const [timelineSteps, setTimelineSteps] = useState([
+    { id: 'created', label: 'Annonce créée', completed: true, date: null as string | null, canValidate: [], autoValidate: true },
+    { id: 'validated', label: 'Colis validé', completed: false, date: null as string | null, canValidate: ['sender', 'gp'], autoValidate: false },
+    { id: 'picked_up', label: 'GP prend en charge', completed: false, date: null as string | null, canValidate: ['gp'], autoValidate: false },
+    { id: 'in_transit', label: 'Transport en cours', completed: false, date: null as string | null, canValidate: [], autoValidate: true },
+    { id: 'delivered', label: 'Livré au destinataire', completed: false, date: null as string | null, canValidate: ['gp'], autoValidate: false },
+    { id: 'completed', label: 'Clôturé', completed: false, date: null as string | null, canValidate: [], autoValidate: true },
+  ])
   const { user } = useAuth()
   const { theme } = useTheme()
 
-  const handleGoBack = () => {
-    navigation.goBack()
+  const getUserRole = () => {
+    if (!coliSpace || !user) return null
+    if (coliSpace.sender_id === user.id) return 'sender'
+    if (coliSpace.gp_id === user.id) return 'gp'
+    // Check if user is the receiver (by email match)
+    if (coliSpace.receiver_email === user.email) return 'receiver'
+    return null
+  }
+
+  const canValidateStep = (step: any) => {
+    const userRole = getUserRole()
+    if (!userRole || step.autoValidate) return false
+    return step.canValidate.includes(userRole)
+  }
+
+  const validateStep = async (stepId: string) => {
+    try {
+      const currentStepIndex = timelineSteps.findIndex(step => step.id === stepId)
+      if (currentStepIndex === -1) return
+
+      const updatedSteps = [...timelineSteps]
+      const currentStep = updatedSteps[currentStepIndex]
+
+      // Special logic for validation step (requires both sender and GP)
+      if (stepId === 'validated') {
+        const userRole = getUserRole()
+        // For now, we'll mark as completed when either party validates
+        // In a real app, you'd track both validations separately
+        updatedSteps[currentStepIndex] = {
+          ...currentStep,
+          completed: true,
+          date: new Date().toISOString()
+        }
+
+        // Update in database
+        const { error } = await supabase
+          .from('timeline_steps')
+          .update({
+            completed: true,
+            validated_by: user!.id,
+            validated_at: new Date().toISOString()
+          })
+          .eq('coli_space_id', coliSpaceId)
+          .eq('step_id', stepId)
+
+        if (error) throw error
+
+      } else {
+        updatedSteps[currentStepIndex] = {
+          ...currentStep,
+          completed: true,
+          date: new Date().toISOString()
+        }
+
+        // Update in database
+        const { error } = await supabase
+          .from('timeline_steps')
+          .update({
+            completed: true,
+            validated_by: user!.id,
+            validated_at: new Date().toISOString()
+          })
+          .eq('coli_space_id', coliSpaceId)
+          .eq('step_id', stepId)
+
+        if (error) throw error
+
+        // Auto-validate next step if it's autoValidate
+        if (currentStepIndex + 1 < updatedSteps.length && updatedSteps[currentStepIndex + 1].autoValidate) {
+          updatedSteps[currentStepIndex + 1] = {
+            ...updatedSteps[currentStepIndex + 1],
+            completed: true,
+            date: new Date().toISOString()
+          }
+
+          // Also update auto-validated step in database
+          const nextStepId = updatedSteps[currentStepIndex + 1].id
+          await supabase
+            .from('timeline_steps')
+            .update({
+              completed: true,
+              validated_at: new Date().toISOString()
+            })
+            .eq('coli_space_id', coliSpaceId)
+            .eq('step_id', nextStepId)
+        }
+      }
+
+      setTimelineSteps(updatedSteps)
+
+      // Send notification for step validation
+      if (coliSpace) {
+        if (stepId === 'picked_up') {
+          await sendColiSpaceNotification('PACKAGE_PICKED_UP', coliSpace)
+        } else if (stepId === 'delivered') {
+          await sendColiSpaceNotification('PACKAGE_DELIVERED', coliSpace)
+        } else {
+          await sendColiSpaceNotification('STEP_VALIDATED', coliSpace)
+        }
+      }
+
+    } catch (error) {
+      console.error('Error validating step:', error)
+    }
+  }
+
+  const fetchTimelineSteps = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('timeline_steps')
+        .select('*')
+        .eq('coli_space_id', coliSpaceId)
+        .order('created_at')
+
+      if (error) {
+        console.error('Erreur lors du chargement de la timeline:', error)
+        // Si la table n'existe pas encore ou erreur, utiliser les étapes par défaut
+        setTimelineSteps([
+          { id: 'created', label: 'Annonce créée', completed: true, date: null, canValidate: [], autoValidate: true },
+          { id: 'validated', label: 'Colis validé', completed: false, date: null, canValidate: ['sender', 'gp'], autoValidate: false },
+          { id: 'picked_up', label: 'GP prend en charge', completed: false, date: null, canValidate: ['gp'], autoValidate: false },
+          { id: 'in_transit', label: 'Transport en cours', completed: false, date: null, canValidate: [], autoValidate: true },
+          { id: 'delivered', label: 'Livré au destinataire', completed: false, date: null, canValidate: ['gp'], autoValidate: false },
+          { id: 'completed', label: 'Clôturé', completed: false, date: null, canValidate: [], autoValidate: true },
+        ])
+        return
+      }
+
+      if (!data || data.length === 0) {
+        console.log('Aucune étape de timeline trouvée, tentative de création...')
+
+        // Essayer de créer les étapes manuellement si elles n'existent pas
+        try {
+          const defaultSteps = [
+            { step_id: 'created', label: 'Annonce créée', completed: true },
+            { step_id: 'validated', label: 'Colis validé', completed: false },
+            { step_id: 'picked_up', label: 'GP prend en charge', completed: false },
+            { step_id: 'in_transit', label: 'Transport en cours', completed: false },
+            { step_id: 'delivered', label: 'Livré au destinataire', completed: false },
+            { step_id: 'completed', label: 'Clôturé', completed: false },
+          ]
+
+          // Insérer les étapes par défaut
+          for (const step of defaultSteps) {
+            await supabase.from('timeline_steps').insert({
+              coli_space_id: coliSpaceId,
+              ...step
+            })
+          }
+
+          console.log('Étapes de timeline créées avec succès')
+
+          // Recharger les données
+          const { data: newData } = await supabase
+            .from('timeline_steps')
+            .select('*')
+            .eq('coli_space_id', coliSpaceId)
+            .order('created_at')
+
+          if (newData && newData.length > 0) {
+            const formattedSteps = newData.map(step => ({
+              id: step.step_id,
+              label: step.label,
+              completed: step.completed,
+              date: step.validated_at || null,
+              canValidate: getStepPermissions(step.step_id),
+              autoValidate: ['created', 'in_transit', 'completed'].includes(step.step_id)
+            }))
+            setTimelineSteps(formattedSteps)
+            return
+          }
+        } catch (createError) {
+          console.error('Erreur lors de la création des étapes:', createError)
+        }
+
+        // Si la création échoue, utiliser les étapes par défaut côté client
+        console.log('Utilisation des étapes par défaut côté client')
+        setTimelineSteps([
+          { id: 'created', label: 'Annonce créée', completed: true, date: null, canValidate: [], autoValidate: true },
+          { id: 'validated', label: 'Colis validé', completed: false, date: null, canValidate: ['sender', 'gp'], autoValidate: false },
+          { id: 'picked_up', label: 'GP prend en charge', completed: false, date: null, canValidate: ['gp'], autoValidate: false },
+          { id: 'in_transit', label: 'Transport en cours', completed: false, date: null, canValidate: [], autoValidate: true },
+          { id: 'delivered', label: 'Livré au destinataire', completed: false, date: null, canValidate: ['gp'], autoValidate: false },
+          { id: 'completed', label: 'Clôturé', completed: false, date: null, canValidate: [], autoValidate: true },
+        ])
+        return
+      }
+
+      // Convert database format to component format
+      const formattedSteps = data.map(step => ({
+        id: step.step_id,
+        label: step.label,
+        completed: step.completed,
+        date: step.validated_at || null,
+        canValidate: getStepPermissions(step.step_id),
+        autoValidate: ['created', 'in_transit', 'completed'].includes(step.step_id)
+      }))
+
+      console.log('Timeline chargée depuis la BD:', formattedSteps)
+      setTimelineSteps(formattedSteps)
+    } catch (err) {
+      console.error('Erreur inattendue lors du chargement de la timeline:', err)
+      // En cas d'erreur, utiliser les étapes par défaut
+      setTimelineSteps([
+        { id: 'created', label: 'Annonce créée', completed: true, date: null, canValidate: [], autoValidate: true },
+        { id: 'validated', label: 'Colis validé', completed: false, date: null, canValidate: ['sender', 'gp'], autoValidate: false },
+        { id: 'picked_up', label: 'GP prend en charge', completed: false, date: null, canValidate: ['gp'], autoValidate: false },
+        { id: 'in_transit', label: 'Transport en cours', completed: false, date: null, canValidate: [], autoValidate: true },
+        { id: 'delivered', label: 'Livré au destinataire', completed: false, date: null, canValidate: ['gp'], autoValidate: false },
+        { id: 'completed', label: 'Clôturé', completed: false, date: null, canValidate: [], autoValidate: true },
+      ])
+    }
+  }
+
+  const getStepPermissions = (stepId: string) => {
+    switch (stepId) {
+      case 'validated': return ['sender', 'gp']
+      case 'picked_up': return ['gp']
+      case 'delivered': return ['gp']
+      default: return []
+    }
   }
 
   useEffect(() => {
     const initialize = async () => {
       await fetchColiSpace()
       await fetchMessages()
+      await fetchTimelineSteps()
     }
     initialize()
   }, [coliSpaceId])
@@ -46,11 +275,15 @@ const ColiSpaceScreen: React.FC<Props> = ({ route }) => {
         setMessages(prev => [...prev, payload.new as Message])
       })
       .subscribe()
-    
+
     return () => {
       supabase.removeChannel(subscription)
     }
   }, [coliSpaceId])
+
+  const handleGoBack = () => {
+    navigation.goBack()
+  }
 
   const fetchColiSpace = async () => {
     const { data, error } = await supabase
@@ -82,7 +315,13 @@ const ColiSpaceScreen: React.FC<Props> = ({ route }) => {
       message: newMessage,
     })
     if (error) console.error(error)
-    else setNewMessage('')
+    else {
+      setNewMessage('')
+      // Send notification to other participants
+      if (coliSpace) {
+        await sendColiSpaceNotification('NEW_MESSAGE', coliSpace)
+      }
+    }
   }
 
   const pickImage = async () => {
@@ -174,6 +413,87 @@ const ColiSpaceScreen: React.FC<Props> = ({ route }) => {
     sendButtonText: {
       color: '#fff',
     },
+    timelineContainer: {
+      backgroundColor: theme === 'dark' ? '#1a1a1a' : '#fff',
+      padding: 16,
+      margin: 10,
+      borderRadius: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    timelineTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: theme === 'dark' ? '#fff' : '#000',
+      marginBottom: 16,
+      textAlign: 'center',
+    },
+    timelineStep: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    timelineLine: {
+      width: 20,
+      alignItems: 'center',
+    },
+    timelineConnector: {
+      width: 2,
+      height: 30,
+      backgroundColor: '#e0e0e0',
+      position: 'absolute',
+      top: 20,
+    },
+    timelineDot: {
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: '#e0e0e0',
+      borderWidth: 2,
+      borderColor: '#6C47FF',
+      marginRight: 12,
+    },
+    timelineDotCompleted: {
+      backgroundColor: '#6C47FF',
+    },
+    timelineContent: {
+      flex: 1,
+    },
+    timelineLabel: {
+      fontSize: 14,
+      color: theme === 'dark' ? '#ccc' : '#666',
+      fontWeight: '500',
+    },
+    timelineLabelCompleted: {
+      color: theme === 'dark' ? '#fff' : '#000',
+    },
+    timelineDate: {
+      fontSize: 12,
+      color: theme === 'dark' ? '#888' : '#999',
+      marginTop: 2,
+    },
+    validateButton: {
+      backgroundColor: '#6C47FF',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 6,
+      marginTop: 8,
+      alignSelf: 'flex-start',
+    },
+    validateButtonText: {
+      color: '#fff',
+      fontSize: 12,
+      fontWeight: 'bold',
+    },
+    timelineEmptyText: {
+      textAlign: 'center',
+      color: theme === 'dark' ? '#ccc' : '#666',
+      fontStyle: 'italic',
+      paddingVertical: 20,
+    },
   })
 
   return (
@@ -189,6 +509,42 @@ const ColiSpaceScreen: React.FC<Props> = ({ route }) => {
           }
         </Text>
       </View>
+
+      {/* Timeline Section */}
+      <View style={styles.timelineContainer}>
+        <Text style={styles.timelineTitle}>État du colis</Text>
+        {timelineSteps && timelineSteps.length > 0 ? (
+          timelineSteps.map((step, index) => (
+            <View key={step.id} style={styles.timelineStep}>
+              <View style={styles.timelineLine}>
+                {index < timelineSteps.length - 1 && <View style={styles.timelineConnector} />}
+              </View>
+              <View style={[styles.timelineDot, step.completed && styles.timelineDotCompleted]} />
+              <View style={styles.timelineContent}>
+                <Text style={[styles.timelineLabel, step.completed && styles.timelineLabelCompleted]}>
+                  {step.label}
+                </Text>
+                {step.date && (
+                  <Text style={styles.timelineDate}>
+                    {new Date(step.date).toLocaleDateString('fr-FR')}
+                  </Text>
+                )}
+                {!step.completed && canValidateStep(step) && (
+                  <TouchableOpacity
+                    style={styles.validateButton}
+                    onPress={() => validateStep(step.id)}
+                  >
+                    <Text style={styles.validateButtonText}>Valider cette étape</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.timelineEmptyText}>Chargement de la timeline...</Text>
+        )}
+      </View>
+
       <FlatList
         style={styles.messagesList}
         data={messages}

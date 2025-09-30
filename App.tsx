@@ -1,5 +1,5 @@
 import 'react-native-gesture-handler'
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
@@ -19,8 +19,9 @@ import MessagesScreen from './screens/MessagesScreen'
 import ProfileScreen from './screens/ProfileScreen'
 import ColiSpaceScreen from './screens/ColiSpaceScreen'
 import AnnouncementDetailsScreen from './screens/AnnouncementDetailsScreen'
+import ReceiverInfoScreen from './screens/ReceiverInfoScreen'
 import { RootStackParamList, MainTabParamList } from './types/navigation'
-
+import { requestNotificationPermissions } from './services/notifications'
 const Stack = createNativeStackNavigator<RootStackParamList>()
 const Tab = createBottomTabNavigator<MainTabParamList>()
 
@@ -70,7 +71,7 @@ function MainTabs() {
             <Tab.Screen
               name="Messages"
               component={MessagesScreen}
-              options={{ title: 'Messages' }}
+              options={{ title: 'Espaces Coli' }}
             />
             <Tab.Screen
               name="Profile"
@@ -83,6 +84,20 @@ function MainTabs() {
 
 function AppNavigator() {
   const { user, loading } = useAuth()
+  const navigationRef = useRef<any>(null)
+
+  // Handle navigation when user state changes
+  useEffect(() => {
+    if (!loading && navigationRef.current) {
+      if (!user) {
+        // User logged out, navigate to Welcome screen
+        navigationRef.current.reset({
+          index: 0,
+          routes: [{ name: 'Welcome' }],
+        })
+      }
+    }
+  }, [user, loading])
 
   if (loading) {
     return null // Or a loading screen
@@ -91,7 +106,7 @@ function AppNavigator() {
   const initialRouteName = user ? 'Main' : 'Welcome'
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator 
         screenOptions={{ headerShown: false }}
         initialRouteName={initialRouteName}
@@ -101,6 +116,7 @@ function AppNavigator() {
         <Stack.Screen name="Main" component={MainTabs} />
         <Stack.Screen name="ColiSpace" component={ColiSpaceScreen} />
         <Stack.Screen name="AnnouncementDetails" component={AnnouncementDetailsScreen} />
+        <Stack.Screen name="ReceiverInfo" component={ReceiverInfoScreen} />
         <Stack.Screen name="CreateAnnouncementChoice" component={CreateAnnouncementChoiceScreen} />
         <Stack.Screen name="CreateGPAnnouncement" component={CreateGPAnnouncementScreen} />
         <Stack.Screen name="CreateSenderAnnouncement" component={CreateSenderAnnouncementScreen} />
@@ -111,6 +127,11 @@ function AppNavigator() {
 }
 
 export default function App() {
+  useEffect(() => {
+    // Initialize notifications on app start
+    requestNotificationPermissions()
+  }, [])
+
   return (
     <AuthProvider>
       <ThemeProvider>

@@ -73,6 +73,22 @@ const CreateGPAnnouncementScreen: React.FC = () => {
         console.error('Error creating GP announcement:', error)
         Alert.alert('Erreur', 'Erreur lors de la création: ' + error.message)
       } else {
+        // Create ColiSpace automatically
+        const { data: coliSpace, error: coliSpaceError } = await supabase
+          .from('coli_spaces')
+          .insert({
+            announcement_id: data[0].id,
+            gp_id: user!.id,
+            status: 'created'
+          })
+          .select()
+          .single()
+
+        if (coliSpaceError) {
+          console.error('Error creating ColiSpace:', coliSpaceError)
+          // Continue anyway, don't block the announcement creation
+        }
+
         Alert.alert('Succès', 'Votre annonce de transporteur a été créée !')
         // Reset form
         setDepartureCity('')

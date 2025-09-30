@@ -1,11 +1,25 @@
-import React from 'react'
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import React, { useState } from 'react'
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 
 const ProfileScreen: React.FC = () => {
   const { user, signOut } = useAuth()
   const { theme, toggleTheme } = useTheme()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  const handleSignOut = async () => {
+    try {
+      setIsLoggingOut(true)
+      await signOut()
+      // La navigation sera gérée automatiquement par le contexte d'authentification
+    } catch (error: any) {
+      console.error('Erreur lors de la déconnexion:', error)
+      Alert.alert('Erreur', 'Impossible de se déconnecter. Veuillez réessayer.')
+    } finally {
+      setIsLoggingOut(false)
+    }
+  }
 
   const styles = StyleSheet.create({
     container: {
@@ -36,6 +50,10 @@ const ProfileScreen: React.FC = () => {
       color: '#fff',
       fontSize: 16,
     },
+    buttonDisabled: {
+      backgroundColor: '#ccc',
+      opacity: 0.6,
+    },
   })
 
   return (
@@ -46,8 +64,14 @@ const ProfileScreen: React.FC = () => {
       <TouchableOpacity style={styles.button} onPress={toggleTheme}>
         <Text style={styles.buttonText}>Changer thème</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.button} onPress={signOut}>
-        <Text style={styles.buttonText}>Se déconnecter</Text>
+      <TouchableOpacity
+        style={[styles.button, isLoggingOut && styles.buttonDisabled]}
+        onPress={handleSignOut}
+        disabled={isLoggingOut}
+      >
+        <Text style={styles.buttonText}>
+          {isLoggingOut ? 'Déconnexion...' : 'Se déconnecter'}
+        </Text>
       </TouchableOpacity>
     </View>
   )

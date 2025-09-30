@@ -76,6 +76,26 @@ const CreateSenderAnnouncementScreen: React.FC = () => {
         console.error('Error creating sender announcement:', error)
         Alert.alert('Erreur', 'Erreur lors de la création: ' + error.message)
       } else {
+        // Create ColiSpace automatically with sender and receiver
+        const { data: coliSpace, error: coliSpaceError } = await supabase
+          .from('coli_spaces')
+          .insert({
+            announcement_id: data[0].id,
+            sender_id: user!.id,
+            receiver_name: receiverName,
+            receiver_phone: receiverPhone,
+            receiver_email: receiverEmail.toLowerCase(),
+            receiver_address: '', // Could be added later if needed
+            status: 'created'
+          })
+          .select()
+          .single()
+
+        if (coliSpaceError) {
+          console.error('Error creating ColiSpace:', coliSpaceError)
+          // Continue anyway, don't block the announcement creation
+        }
+
         Alert.alert('Succès', 'Votre demande d\'envoi a été créée !')
         // Reset form
         setDepartureCity('')

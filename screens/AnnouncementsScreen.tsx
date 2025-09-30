@@ -10,12 +10,14 @@ import { RootStackParamList } from '../types/navigation'
 
 const AnnouncementsScreen: React.FC = () => {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
+  const [existingColiSpaces, setExistingColiSpaces] = useState<{[key: string]: string}>({}) // announcementId -> coliSpaceId
   const { theme } = useTheme()
   const { user } = useAuth()
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>()
 
   useEffect(() => {
     fetchAnnouncements()
+    checkExistingColiSpaces()
   }, [])
 
   const fetchAnnouncements = async () => {
@@ -34,26 +36,68 @@ const AnnouncementsScreen: React.FC = () => {
     }
   }
 
-  const handleRespond = async (announcement: Announcement) => {
-    // Create ColiSpace
-    const senderId = announcement.announcement_type === 'send_request' ? announcement.user_id : user!.id
-    const gpId = announcement.announcement_type === 'send_request' ? user!.id : announcement.user_id
-    const { data, error } = await supabase
-      .from('coli_spaces')
-      .insert({
-        announcement_id: announcement.id,
-        sender_id: senderId,
-        gp_id: gpId,
-        status: 'created'
+  const checkExistingColiSpaces = async () => {
+    if (!user) return
+
+    try {
+      // Récupérer tous les coli_spaces où l'utilisateur est impliqué
+      const { data, error } = await supabase
+        .from('coli_spaces')
+        .select('id, announcement_id, sender_id, gp_id')
+        .or(`sender_id.eq.${user.id},gp_id.eq.${user.id}`)
+
+      if (error) {
+        console.error('Error checking existing coli_spaces:', error)
+        return
+      }
+
+      // Créer un mapping announcementId -> coliSpaceId
+      const mapping: {[key: string]: string} = {}
+      data?.forEach(coliSpace => {
+        mapping[coliSpace.announcement_id] = coliSpace.id
       })
-      .select()
-      .single()
+
+      setExistingColiSpaces(mapping)
+    } catch (err) {
+      console.error('Unexpected error checking coli_spaces:', err)
+    }
+  }
+
+  const handleRespond = async (announcement: Announcement) => {
+    // If this is a GP offer and user is responding (becoming sender), ask for receiver info first
+    if (announcement.announcement_type === 'gp_offer') {
+      navigation.navigate('ReceiverInfo', { announcementId: announcement.id })
+      return
+    }
+
+    // If this is a send request and user is responding (becoming GP)
+    const senderId = announcement.user_id // The one who created the send_request
+    const gpId = user!.id // Current user becoming GP
+
+    // Utiliser la fonction RPC pour get_or_create
+    const { data, error } = await supabase.rpc('get_or_create_coli_space', {
+      p_announcement_id: announcement.id,
+      p_sender_id: senderId,
+      p_gp_id: gpId
+    })
+
     if (error) {
-      console.error(error)
+      console.error('Erreur lors de la création/récupération de l\'espace Coli:', error)
       alert('Erreur lors de la création de l\'espace Coli: ' + error.message)
-    } else {
+    } else if (data && data.length > 0) {
+      const coliSpaceId = data[0].id
+      const isNew = data[0].is_new
+
+      // Mettre à jour le cache local des coli_spaces existants
+      if (isNew) {
+        setExistingColiSpaces(prev => ({
+          ...prev,
+          [announcement.id]: coliSpaceId
+        }))
+      }
+
       // Navigate to ColiSpace
-      navigation.navigate('ColiSpace', { coliSpaceId: data.id })
+      navigation.navigate('ColiSpace', { coliSpaceId })
     }
   }
 
@@ -75,6 +119,18 @@ const AnnouncementsScreen: React.FC = () => {
 
   const handleDetails = (announcement: Announcement) => {
     navigation.navigate('AnnouncementDetails', { announcementId: announcement.id })
+  }
+
+  const handleRespondOrView = async (announcement: Announcement) => {
+    const existingColiSpaceId = existingColiSpaces[announcement.id]
+
+    if (existingColiSpaceId) {
+      // Rediriger vers l'espace coli existant
+      navigation.navigate('ColiSpace', { coliSpaceId: existingColiSpaceId })
+    } else {
+      // Créer un nouvel espace ou aller vers ReceiverInfo
+      await handleRespond(announcement)
+    }
   }
 
   const renderItem = ({ item }: { item: Announcement }) => (
@@ -149,8 +205,13 @@ const AnnouncementsScreen: React.FC = () => {
         <TouchableOpacity style={[styles.button, styles.detailsButton]} onPress={() => handleDetails(item)}>
           <Text style={styles.detailsButtonText}>Détails</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.button, styles.respondButton]} onPress={() => handleRespond(item)}>
-          <Text style={styles.respondButtonText}>Répondre</Text>
+        <TouchableOpacity
+          style={[styles.button, existingColiSpaces[item.id] ? styles.viewColiButton : styles.respondButton]}
+          onPress={() => handleRespondOrView(item)}
+        >
+          <Text style={existingColiSpaces[item.id] ? styles.viewColiButtonText : styles.respondButtonText}>
+            {existingColiSpaces[item.id] ? 'Voir l\'espace Coli' : 'Répondre'}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -249,12 +310,20 @@ const AnnouncementsScreen: React.FC = () => {
     respondButton: {
       backgroundColor: '#6C47FF',
     },
+    viewColiButton: {
+      backgroundColor: '#28A745',
+    },
     detailsButtonText: {
       color: '#333',
       fontSize: 14,
       fontWeight: 'bold',
     },
     respondButtonText: {
+      color: '#fff',
+      fontSize: 14,
+      fontWeight: 'bold',
+    },
+    viewColiButtonText: {
       color: '#fff',
       fontSize: 14,
       fontWeight: 'bold',

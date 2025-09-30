@@ -25,6 +25,8 @@ const AuthScreen: React.FC = () => {
       } else {
         await signIn(email, password)
       }
+      // Navigate to Main after successful authentication
+      navigation.navigate('Main' as never)
     } catch (error) {
       console.error(error)
     }
